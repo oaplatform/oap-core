@@ -114,7 +114,7 @@ public class Engine implements Runnable {
             return new ConstTemplate<>( pathAndDefault.get( 0 ).defaultValue );
         }
 
-        return new JavaCTemplate<>( name, clazz, pathAndDefault, delimiter, map, emptyMap(), emptyMap(), tmpPath );
+        return new JavaCTemplate2<>( name, clazz, pathAndDefault, delimiter, map, emptyMap(), emptyMap(), tmpPath );
     }
 
     public <T> Template<T, Template.Line> getTemplate( String name, Class<T> clazz,
@@ -186,7 +186,7 @@ public class Engine implements Runnable {
                 return new ConstTemplate<>( lines.get( 0 ).defaultValue );
             }
 
-            return new JavaCTemplate<>( name, clazz, lines, null, map, overrides, mapper, tmpPath );
+            return new JavaCTemplate2<>( name, clazz, lines, null, map, overrides, mapper, tmpPath );
         } );
     }
 
