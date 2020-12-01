@@ -65,7 +65,8 @@ public class JavaCTemplate<T, L extends Template.Line> implements Template<T, L>
     JavaCTemplate( String name, Class<T> clazz, List<L> pathAndDefault, String delimiter, TemplateStrategy<L> map,
                    Map<String, String> overrides,
                    Path cacheFile ) {
-        String nameEscaped = name.replaceAll( "[\\s%\\-;\\\\/:*?\"<>|]", "_" );
+        var nameEscaped = name.replaceAll( "[^a-zA-Z0-9_]", "_" );
+        if(nameEscaped.matches( "^[0-9].*" )) nameEscaped  = "_" + nameEscaped;
         this.map = map;
         this.overrides = overrides;
         var c = new StringBuilder();
@@ -252,7 +253,7 @@ public class JavaCTemplate<T, L extends Template.Line> implements Template<T, L>
                     }
 
                     tab( c, tab ).append( " " ).append( classType ).append( " " ).append( field ).append( " = " );
-                    if(declaredField.typeCast) c.append( '(' ).append( classType ).append( ") " );
+                    if( declaredField.typeCast ) c.append( '(' ).append( classType ).append( ") " );
                     c.append( rf ).append( ";\n" );
 
                     lc.setValue( declaredField );

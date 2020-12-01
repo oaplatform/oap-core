@@ -91,7 +91,7 @@ public class EngineTest extends Fixtures {
 
     @Test
     public void processNullDefault() {
-        assertThat( engine.getTemplate( "test2", Test1.class, List.of( line( "testStr", "testStr", null ) ), " " )
+        assertThat( engine.getTemplate( "12+test2.sddsf(1,2,3)", Test1.class, List.of( line( "testStr", "testStr", null ) ), " " )
             .renderString( new Test1( Optional.empty(), Optional.of( new Test2() ) ), Map.of() ) ).isEqualTo( "null" );
     }
 
