@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit;
 
 import static oap.template.Template.Line.line;
 import static oap.template.TemplateStrategy.DEFAULT;
+import static oap.util.Pair.__;
 
 @Slf4j
 /**
@@ -64,6 +65,8 @@ public class Engine implements Runnable {
     public final Path tmpPath;
     public final long ttl;
     private final Cache<String, Template<?, ? extends Template.Line>> templates;
+    private final Cache<String, Template<?, ? extends Template.Line>> constTemplates;
+    public long maxConstSize = 1_000_000L;
 
 
     public Engine( Path tmpPath ) {
@@ -78,7 +81,12 @@ public class Engine implements Runnable {
             .expireAfterAccess( ttl, TimeUnit.MILLISECONDS )
             .build();
 
-        Metrics.gauge( "oap_templates_cache_size", templates, Cache::size );
+        constTemplates = CacheBuilder.newBuilder()
+            .expireAfterAccess( ttl, TimeUnit.MILLISECONDS )
+            .maximumSize( maxConstSize )
+            .build();
+
+        Metrics.gauge( "oap_templates_cache_size", __( templates, constTemplates ), p -> p._1.size() + p._2.size() );
     }
 
     public static String getHashName( String template ) {
@@ -154,61 +162,66 @@ public class Engine implements Runnable {
         var id = name + "_" + getHashName( template );
 
         var func = ( Template<T, Template.Line> ) templates.getIfPresent( id );
+        if( func == null ) func = ( Template<T, Template.Line> ) constTemplates.getIfPresent( id );
         if( func == null ) {
             synchronized( id.intern() ) {
-                func = ( Template<T, Template.Line> ) templates.get( id, () -> {
-                    var variable = false;
-                    StringBuilder function = null;
+                func = ( Template<T, Template.Line> ) templates.getIfPresent( id );
+                if( func == null ) func = ( Template<T, Template.Line> ) constTemplates.getIfPresent( id );
+                if( func != null ) return func;
 
-                    var lines = new ArrayList<Template.Line>();
-                    try( var sbp = StringBuilderPool.borrowObject() ) {
-                        var text = sbp.getObject();
+                var variable = false;
+                StringBuilder function = null;
 
-                        for( var i = 0; i < template.length(); i++ ) {
-                            var ch = template.charAt( i );
-                            switch( ch ) {
-                                case '$':
-                                    if( variable ) {
-                                        variable = false;
-                                        add( text, ch, function );
-                                    } else {
-                                        variable = true;
-                                    }
-                                    break;
-                                case '{':
-                                    if( variable )
-                                        startVariable( lines, text );
-                                    else
-                                        add( text, ch, function );
-                                    break;
-                                case '}':
-                                    if( variable ) {
-                                        endVariable( lines, text, function, true );
-                                        variable = false;
-                                        function = null;
-                                    } else add( text, ch, function );
-                                    break;
-                                case ';':
-                                    if( variable ) {
-                                        function = new StringBuilder();
-                                    } else {
-                                        add( text, ch, function );
-                                    }
-                                    break;
-                                default:
+                var lines = new ArrayList<Template.Line>();
+                try( var sbp = StringBuilderPool.borrowObject() ) {
+                    var text = sbp.getObject();
+
+                    for( var i = 0; i < template.length(); i++ ) {
+                        var ch = template.charAt( i );
+                        switch( ch ) {
+                            case '$':
+                                if( variable ) {
+                                    variable = false;
                                     add( text, ch, function );
-                            }
+                                } else {
+                                    variable = true;
+                                }
+                                break;
+                            case '{':
+                                if( variable )
+                                    startVariable( lines, text );
+                                else
+                                    add( text, ch, function );
+                                break;
+                            case '}':
+                                if( variable ) {
+                                    endVariable( lines, text, function, true );
+                                    variable = false;
+                                    function = null;
+                                } else add( text, ch, function );
+                                break;
+                            case ';':
+                                if( variable ) {
+                                    function = new StringBuilder();
+                                } else {
+                                    add( text, ch, function );
+                                }
+                                break;
+                            default:
+                                add( text, ch, function );
                         }
-
-                        endVariable( lines, text, function, false );
                     }
 
-                    if( lines.size() == 1 && lines.get( 0 ).path == null ) {
-                        return new ConstTemplate<>( lines.get( 0 ).defaultValue );
-                    }
+                    endVariable( lines, text, function, false );
+                }
 
-                    return new JavaCTemplate<>( id, clazz, lines, null, map, overrides, tmpPath );
-                } );
+                if( lines.size() == 1 && lines.get( 0 ).path == null ) {
+                    func = new ConstTemplate<>( lines.get( 0 ).defaultValue );
+                    constTemplates.put( id, func );
+                } else {
+                    func = new JavaCTemplate<>( id, clazz, lines, null, map, overrides, tmpPath );
+                    templates.put( id, func );
+                }
             }
         }
 
@@ -267,6 +280,7 @@ public class Engine implements Runnable {
     public void run() {
         try {
             templates.cleanUp();
+            constTemplates.cleanUp();
 
             var now = System.currentTimeMillis();
             Files.walk( tmpPath ).forEach( path -> {
