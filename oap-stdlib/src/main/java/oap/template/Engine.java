@@ -45,7 +45,6 @@ import java.util.concurrent.TimeUnit;
 
 import static oap.template.Template.Line.line;
 import static oap.template.TemplateStrategy.DEFAULT;
-import static oap.util.Pair.__;
 
 @Slf4j
 /**
@@ -64,9 +63,9 @@ public class Engine implements Runnable {
 
     public final Path tmpPath;
     public final long ttl;
+    public final long maxConstSize;
     private final Cache<String, Template<?, ? extends Template.Line>> templates;
     private final Cache<String, Template<?, ? extends Template.Line>> constTemplates;
-    public long maxConstSize = 1_000_000L;
 
 
     public Engine( Path tmpPath ) {
@@ -74,8 +73,13 @@ public class Engine implements Runnable {
     }
 
     public Engine( Path tmpPath, long ttl ) {
+        this( tmpPath, ttl, 1_000_000L );
+    }
+
+    public Engine( Path tmpPath, long ttl, long maxConstSize ) {
         this.tmpPath = tmpPath;
         this.ttl = ttl;
+        this.maxConstSize = maxConstSize;
 
         templates = CacheBuilder.newBuilder()
             .expireAfterAccess( ttl, TimeUnit.MILLISECONDS )
