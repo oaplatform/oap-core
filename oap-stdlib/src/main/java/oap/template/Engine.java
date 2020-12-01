@@ -86,7 +86,7 @@ public class Engine implements Runnable {
             .maximumSize( maxConstSize )
             .build();
 
-        Metrics.gauge( "oap_templates_cache_size", __( templates, constTemplates ), p -> p._1.size() + p._2.size() );
+        Metrics.gauge( "oap_templates_cache_size", this, p -> p.templates.size() + p.constTemplates.size() );
     }
 
     public static String getHashName( String template ) {
